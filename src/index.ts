@@ -1,6 +1,14 @@
+import { getEmails } from "./gmail";
+
 async function main() {
-  console.log("Email Collector");
-  console.log("Ambiente configurado com sucesso!");
+    console.log("Mail Collector iniciado!");
+
+    getEmails();
+
+    console.log("Processamento concluído.");
 }
 
-main().catch(console.error);
+main().catch((error) => {
+    console.error("Erro:", error);
+    process.exitCode = 1;
+});
