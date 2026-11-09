@@ -1,6 +1,7 @@
 import { google } from "googleapis";
 import { getGoogleAuth } from "./auth";
 import { extractEmail } from "./extractor";
+import { extractPdfAttachments } from "./attachments";
 
 export async function getEmails() {
   const auth = await getGoogleAuth();
@@ -13,7 +14,7 @@ export async function getEmails() {
   const response = await gmail.users.messages.list({
     userId: "me",
     maxResults: 2,
-    q: "in:inbox",
+    q: "in:inbox category:primary",
   });
 
   const messages = response.data.messages ?? [];
@@ -36,5 +37,23 @@ export async function getEmails() {
     console.log("Assunto:", email.subject);
     console.log("Data:", email.date);
     console.log("Texto:", email.text || "[Sem texto extraído]");
+
+    const pdfs = await extractPdfAttachments(
+      gmail,
+      result.data
+    );
+
+    for (const pdf of pdfs) {
+      console.log("\nPDF:", pdf.filename);
+      console.log("Status:", pdf.status);
+
+      if (pdf.status === "success") {
+        console.log("Texto extraído:\n", pdf.text);
+      } else if (pdf.status === "empty") {
+        console.log("[PDF sem texto extraível]");
+      } else {
+        console.error("Erro no PDF:", pdf.error);
+      }
+    }
   }
 }
