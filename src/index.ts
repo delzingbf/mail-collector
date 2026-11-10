@@ -1,14 +1,11 @@
-import { getEmails } from "./gmail";
 import { syncEmails } from "./sync";
 
 async function main() {
-    console.log("Mail Collector iniciado!");
-
-    syncEmails();
-
+  console.log("Mail Collector iniciado!");
+  await syncEmails();
 }
 
 main().catch((error) => {
-    console.error("Erro na execução:", error);
-    process.exitCode = 1;
+  console.error("Erro na execução:", error);
+  process.exitCode = 1;
 });

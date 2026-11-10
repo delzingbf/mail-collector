@@ -1,14 +1,29 @@
-
 @echo off
-cd /d "%~dp0"
+setlocal EnableExtensions DisableDelayedExpansion
+pushd "%~dp0"
+if errorlevel 1 goto sem_pasta
 
-echo ================================
 echo MAIL COLLECTOR - RELATORIO
-echo ================================
 echo.
-
-call npm run report
+call scripts\verificar_ambiente.bat report
+if errorlevel 1 goto falha_ambiente
+call npm.cmd run report
+set "resultado=%errorlevel%"
+if not "%resultado%"=="0" goto falha
 
 echo.
-echo Operacao finalizada.
-pause
+echo Operacao concluida sem erros.
+goto fim
+:falha_ambiente
+set "resultado=1"
+:falha
+echo.
+echo ERRO: A operacao falhou. Confira as mensagens acima.
+:fim
+popd
+if not "%MAIL_COLLECTOR_NO_PAUSE%"=="1" pause
+exit /b %resultado%
+:sem_pasta
+echo ERRO: Nao foi possivel acessar a pasta do projeto.
+if not "%MAIL_COLLECTOR_NO_PAUSE%"=="1" pause
+exit /b 1

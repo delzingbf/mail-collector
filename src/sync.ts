@@ -99,4 +99,8 @@ export async function syncEmails(): Promise<void> {
   console.log("Já armazenados:", skipped);
   console.log("Com pendências:", pending);
   console.log("Falhas:", failed);
+
+  if (failed > 0) {
+    throw new Error(`${failed} mensagem(ns) não puderam ser sincronizadas. Execute novamente para tentar os registros que falharam.`);
+  }
 }
