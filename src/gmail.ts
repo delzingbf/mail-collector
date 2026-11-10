@@ -14,7 +14,7 @@ export async function getEmails() {
   const response = await gmail.users.messages.list({
     userId: "me",
     maxResults: 2,
-    q: "in:inbox category:primary",
+    q: "in:inbox",
   });
 
   const messages = response.data.messages ?? [];

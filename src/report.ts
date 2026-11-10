@@ -9,7 +9,6 @@ import {
   TextRun,
   HeadingLevel,
   AlignmentType,
-  BorderStyle,
 } from "docx";
 
 import { getStoredEmails } from "./storage";
@@ -17,10 +16,9 @@ import { getStoredEmails } from "./storage";
 const REPORTS_DIR = path.resolve("reports");
 
 const COLORS = {
-  title: "243247",
+  title: "000000",
   text: "252525",
   secondary: "667085",
-  divider: "D9DEE5",
 };
 
 function makeParagraphs(text: string): Paragraph[] {
@@ -33,18 +31,29 @@ function makeParagraphs(text: string): Paragraph[] {
     ];
   }
 
-  return text.split(/\r?\n/).map(
-    (line) =>
-      new Paragraph({
-        text: line || " ",
-        style: "BodyText",
-      })
-  );
+  // Blank lines become paragraph spacing in the report only.
+  // Preserve every nonblank line verbatim; never rewrite the stored content.
+  const paragraphs: Paragraph[] = [];
+  let blankBefore = false;
+  for (const line of text.split(/\r\n|\n|\r/)) {
+    if (!line.trim()) {
+      blankBefore = paragraphs.length > 0;
+      continue;
+    }
+    paragraphs.push(new Paragraph({
+      text: line,
+      style: "BodyText",
+      spacing: { before: blankBefore ? 100 : 0 },
+    }));
+    blankBefore = false;
+  }
+  return paragraphs;
 }
 
 function metadata(label: string, value: string): Paragraph {
   return new Paragraph({
-    spacing: { after: 80 },
+    spacing: { after: 40 },
+    keepNext: true,
     children: [
       new TextRun({
         text: `${label}: `,
@@ -65,9 +74,10 @@ function sectionTitle(title: string): Paragraph {
   return new Paragraph({
     text: title,
     heading: HeadingLevel.HEADING_2,
+    keepNext: true,
     spacing: {
-      before: 300,
-      after: 140,
+      before: 180,
+      after: 80,
     },
   });
 }
@@ -96,14 +106,14 @@ export async function generateReport(): Promise<void> {
     new Paragraph({
       text: "MAIL COLLECTOR",
       alignment: AlignmentType.CENTER,
-      spacing: { before: 2200, after: 250 },
+      spacing: { before: 0, after: 100 },
       style: "CoverLabel",
     }),
     new Paragraph({
       text: "Relatório de E-mails Coletados",
       alignment: AlignmentType.CENTER,
       heading: HeadingLevel.TITLE,
-      spacing: { after: 350 },
+      spacing: { after: 180 },
     }),
     new Paragraph({
       text: `${emails.length} mensagens coletadas`,
@@ -117,46 +127,37 @@ export async function generateReport(): Promise<void> {
     })
   );
 
-  for (const email of emails) {
+  for (const [emailIndex, email] of emails.entries()) {
+    const recordId = String(emailIndex + 1).padStart(3, "0");
     paragraphs.push(
+      new Paragraph({
+        text: `REGISTRO ${recordId}`,
+        heading: HeadingLevel.HEADING_1,
+        keepNext: true,
+        spacing: { before: 280, after: 100 },
+      }),
       new Paragraph({
         text: email.subject || "Sem assunto",
-        heading: HeadingLevel.HEADING_1,
-        pageBreakBefore: true,
-      })
-    );
-
-    paragraphs.push(
+        style: "Subject",
+        keepNext: true,
+      }),
       metadata("Remetente", email.from),
-      metadata("Recebido em", email.date)
+      metadata("Recebido em", email.date),
+      metadata("ID Gmail", email.id),
+      sectionTitle("CORPO DO E-MAIL"),
+      ...makeParagraphs(email.text)
     );
 
-    paragraphs.push(
-      new Paragraph({
-        border: {
-          bottom: {
-            color: COLORS.divider,
-            style: BorderStyle.SINGLE,
-            size: 6,
-            space: 8,
-          },
-        },
-        spacing: { after: 200 },
-      })
-    );
-
-    if (email.text.trim()) {
-      paragraphs.push(sectionTitle("Corpo do e-mail"));
-      paragraphs.push(...makeParagraphs(email.text));
-    }
-
-    for (const pdf of email.pdfs) {
+    for (const [pdfIndex, pdf] of email.pdfs.entries()) {
       paragraphs.push(
-        sectionTitle(`Anexo: ${pdf.filename}`)
+        sectionTitle(`ANEXO ${String(pdfIndex + 1).padStart(2, "0")} — ${pdf.filename}`)
       );
 
       if (pdf.status === "success") {
-        paragraphs.push(...makeParagraphs(pdf.text));
+        paragraphs.push(
+          new Paragraph({ text: "Texto extraído do PDF:", style: "Metadata", keepNext: true }),
+          ...makeParagraphs(pdf.text)
+        );
       } else {
         paragraphs.push(
           new Paragraph({
@@ -167,6 +168,8 @@ export async function generateReport(): Promise<void> {
 
         pending.push(
           [
+            `Registro: ${recordId}`,
+            `Anexo: ${String(pdfIndex + 1).padStart(2, "0")}`,
             `Assunto: ${email.subject}`,
             `Remetente: ${email.from}`,
             `ID Gmail: ${email.id}`,
@@ -180,9 +183,9 @@ export async function generateReport(): Promise<void> {
 
     paragraphs.push(
       new Paragraph({
-        text: `ID Gmail: ${email.id}`,
+        text: `FIM DO REGISTRO ${recordId}`,
         style: "Metadata",
-        spacing: { before: 400 },
+        spacing: { before: 160, after: 120 },
       })
     );
   }
@@ -199,6 +202,13 @@ export async function generateReport(): Promise<void> {
         },
       },
       paragraphStyles: [
+        {
+          id: "Subject",
+          name: "Assunto",
+          basedOn: "Normal",
+          run: { bold: true, size: 26, color: COLORS.title },
+          paragraph: { spacing: { after: 100 }, keepNext: true },
+        },
         {
           id: "CoverLabel",
           name: "Cover Label",
@@ -220,8 +230,8 @@ export async function generateReport(): Promise<void> {
           },
           paragraph: {
             spacing: {
-              after: 120,
-              line: 300,
+              after: 40,
+              line: 260,
             },
           },
         },
@@ -244,7 +254,7 @@ export async function generateReport(): Promise<void> {
           next: "Normal",
           run: {
             bold: true,
-            size: 34,
+            size: 28,
             color: COLORS.title,
           },
           paragraph: {

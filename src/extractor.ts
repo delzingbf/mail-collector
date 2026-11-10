@@ -36,8 +36,19 @@ function findText(
 ): string | null {
   if (!part) return null;
 
-  if (part.mimeType === mimeType && part.body?.data) {
-    return decodeBase64Url(part.body.data);
+  // Attachments and forwarded messages are not the email body.
+  const disposition = getHeader(part.headers ?? [], "Content-Disposition");
+  if (
+    part.filename?.trim() ||
+    /^attachment(?:;|$)/i.test(disposition.trim()) ||
+    part.mimeType?.toLowerCase() === "message/rfc822"
+  ) {
+    return null;
+  }
+
+  if (part.mimeType?.toLowerCase() === mimeType && part.body?.data) {
+    const text = decodeBase64Url(part.body.data);
+    if (text.trim()) return text;
   }
 
   for (const child of part.parts ?? []) {
@@ -56,6 +67,10 @@ function htmlToText(html: string): string {
     wordwrap: false,
     preserveNewlines: false,
     selectors: [
+      { selector: "head", format: "skip" },
+      { selector: "style", format: "skip" },
+      { selector: "script", format: "skip" },
+      { selector: "template", format: "skip" },
       { selector: "a", options: { ignoreHref: true } },
       { selector: "img", format: "skip" },
     ],
@@ -67,19 +82,11 @@ export function extractEmail(
 ): ExtractedEmail {
   const headers = message.payload?.headers ?? [];
 
-  const plainText = findText(
-    message.payload,
-    "text/plain"
-  );
-
-  const htmlText = findText(
-    message.payload,
-    "text/html"
-  );
-
-  const text =
-    plainText ??
-    (htmlText ? htmlToText(htmlText) : "");
+  // Some senders include CSS in their text/plain alternative. Prefer text
+  // extracted from HTML, where style/script elements can be skipped safely.
+  const html = findText(message.payload, "text/html");
+  const convertedHtml = html ? htmlToText(html) : "";
+  const text = convertedHtml || findText(message.payload, "text/plain") || "";
 
   return {
     id: message.id ?? "",
