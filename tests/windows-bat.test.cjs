@@ -22,9 +22,20 @@ function fixture(t) {
   return dir;
 }
 function run(dir, name, env = {}) {
-  const result = spawnSync(process.env.ComSpec || 'cmd.exe', ['/d', '/c', `call "${path.join(dir, name)}"`], {
+  // cmd.exe parses quotes itself. libuv's normal argument escaping would
+  // turn them into literal backslash-quotes, preventing the batch from running.
+  const result = spawnSync(process.env.ComSpec || 'cmd.exe', [
+    '/d', '/v:off', '/s', '/c', 'call "%MAIL_COLLECTOR_TEST_BATCH%"',
+  ], {
+    windowsVerbatimArguments: true,
     cwd: os.tmpdir(), encoding: 'utf8', timeout: 15000,
-    env: { ...process.env, MAIL_COLLECTOR_NO_PAUSE: '1', MOCK_NPM_EXIT: '0', ...env },
+    env: {
+      ...process.env,
+      MAIL_COLLECTOR_NO_PAUSE: '1',
+      MOCK_NPM_EXIT: '0',
+      ...env,
+      MAIL_COLLECTOR_TEST_BATCH: path.join(dir, name),
+    },
   });
   assert.ifError(result.error);
   return result;
@@ -48,20 +59,26 @@ for (const [name, command] of [
 test('sync refuses to run without credentials', { skip: !windows }, (t) => {
   const dir = fixture(t);
   fs.unlinkSync(path.join(dir, 'credentials.json'));
-  assert.equal(run(dir, 'sincronizar_emails.bat').status, 1);
+  const result = run(dir, 'sincronizar_emails.bat');
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, /Coloque o credentials\.json/);
   assert.equal(fs.existsSync(path.join(dir, 'invoked.txt')), false);
 });
 test('report refuses to run without installed dependencies', { skip: !windows }, (t) => {
   const dir = fixture(t);
   fs.unlinkSync(path.join(dir, 'node_modules', '.bin', 'tsx.cmd'));
-  assert.equal(run(dir, 'gerar_relatorio.bat').status, 1);
+  const result = run(dir, 'gerar_relatorio.bat');
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, /Dependencias ausentes/);
   assert.equal(fs.existsSync(path.join(dir, 'invoked.txt')), false);
 });
 test('installer works before dependencies and credentials exist', { skip: !windows }, (t) => {
   const dir = fixture(t);
   fs.rmSync(path.join(dir, 'node_modules'), { recursive: true });
   fs.unlinkSync(path.join(dir, 'credentials.json'));
-  assert.equal(run(dir, 'instalar.bat').status, 0);
+  const result = run(dir, 'instalar.bat');
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.equal(fs.readFileSync(path.join(dir, 'invoked.txt'), 'utf8').trim(), 'ci');
 });
 test('missing Node.js produces an actionable error', { skip: !windows }, (t) => {
   const dir = fixture(t);
@@ -69,8 +86,10 @@ test('missing Node.js produces an actionable error', { skip: !windows }, (t) => 
   assert.equal(result.status, 1);
   assert.match(result.stdout, /Node.js nao encontrado/);
 });
-test('opening reports reports failure when a file blocks the folder', { skip: !windows }, (t) => {
+test('opening reports signals failure when a file blocks the folder', { skip: !windows }, (t) => {
   const dir = fixture(t);
   fs.writeFileSync(path.join(dir, 'reports'), 'blocked');
-  assert.equal(run(dir, 'abrir_relatorio.bat').status, 1);
+  const result = run(dir, 'abrir_relatorio.bat');
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, /Nao foi possivel criar ou abrir a pasta reports/);
 });

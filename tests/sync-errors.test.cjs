@@ -1,10 +1,11 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const { spawnSync } = require('node:child_process');
 
 function isolated(code) {
-  const result = spawnSync(process.execPath, ['--import', require.resolve('tsx'), '-e', code], {
+  const result = spawnSync(process.execPath, ['--import', pathToFileURL(require.resolve('tsx')).href, '-e', code], {
     cwd: path.resolve(__dirname, '..'), encoding: 'utf8', timeout: 15000,
   });
   assert.ifError(result.error);

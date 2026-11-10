@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const { spawnSync } = require('node:child_process');
 const { extractPdfText } = require('../src/pdf.ts');
 
@@ -43,7 +44,7 @@ test('generates DOCX and pending list in an isolated folder with spaces and acce
     processedAt: '2026-11-10T12:00:00Z',
   }));
   const result = spawnSync(process.execPath, [
-    '--import', require.resolve('tsx'), path.resolve(__dirname, '../src/report-cli.ts'),
+    '--import', pathToFileURL(require.resolve('tsx')).href, path.resolve(__dirname, '../src/report-cli.ts'),
   ], { cwd: dir, encoding: 'utf8', timeout: 30000 });
   assert.ifError(result.error);
   assert.equal(result.status, 0, result.stdout + result.stderr);
