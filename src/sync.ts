@@ -2,7 +2,7 @@
 import { google } from "googleapis";
 import { getGoogleAuth } from "./auth";
 import { extractEmail } from "./extractor";
-import { extractPdfAttachments } from "./attachments";
+import { extractAttachments } from "./attachments";
 import {
   emailExists,
   saveEmail,
@@ -53,24 +53,24 @@ export async function syncEmails(): Promise<void> {
 
         const email = extractEmail(result.data);
 
-        const pdfs = await extractPdfAttachments(
+        const attachments = await extractAttachments(
           gmail,
           result.data
         );
 
         const storedEmail: StoredEmail = {
           ...email,
-          pdfs,
+          attachments,
           processedAt: new Date().toISOString(),
         };
 
         await saveEmail(storedEmail);
 
-        const hasPdfIssues = pdfs.some(
-          (pdf) => pdf.status !== "success"
+        const hasAttachmentIssues = attachments.some(
+          (attachment) => attachment.status !== "success"
         );
 
-        if (hasPdfIssues) {
+        if (hasAttachmentIssues) {
           pending++;
           console.warn(
             `PENDENTE: ${email.subject}`

@@ -11,13 +11,18 @@ export interface StoredPdf {
   error?: string;
 }
 
+export interface StoredAttachment extends StoredPdf {
+  type: "pdf" | "docx";
+}
+
 export interface StoredEmail {
   id: string;
   from: string;
   subject: string;
   date: string;
   text: string;
-  pdfs: StoredPdf[];
+  pdfs?: StoredPdf[]; // Registros anteriores ao suporte a Word.
+  attachments?: StoredAttachment[];
   processedAt: string;
 }
 
@@ -33,8 +38,12 @@ export async function emailExists(
   id: string
 ): Promise<boolean> {
   try {
-    await fs.access(getEmailPath(id));
-    return true;
+    const content = await fs.readFile(getEmailPath(id), "utf8");
+    const email = JSON.parse(content) as StoredEmail;
+    // Revisit legacy records once to collect Word attachments previously ignored.
+    // Failed/empty attachments are retried on the next sync as well.
+    return Array.isArray(email.attachments) &&
+      email.attachments.every((attachment) => attachment.status === "success");
   } catch (error) {
     if (
       (error as NodeJS.ErrnoException).code === "ENOENT"

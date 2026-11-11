@@ -148,20 +148,25 @@ export async function generateReport(): Promise<void> {
       ...makeParagraphs(email.text)
     );
 
-    for (const [pdfIndex, pdf] of email.pdfs.entries()) {
+    // Prefer the new collection; legacy JSONs remain usable offline.
+    const attachments = email.attachments ?? (email.pdfs ?? []).map(
+      (pdf) => ({ ...pdf, type: "pdf" as const })
+    );
+    for (const [attachmentIndex, attachment] of attachments.entries()) {
+      const label = attachment.type === "docx" ? "Word (.docx)" : "PDF";
       paragraphs.push(
-        sectionTitle(`ANEXO ${String(pdfIndex + 1).padStart(2, "0")} — ${pdf.filename}`)
+        sectionTitle(`ANEXO ${String(attachmentIndex + 1).padStart(2, "0")} — ${attachment.filename}`)
       );
 
-      if (pdf.status === "success") {
+      if (attachment.status === "success") {
         paragraphs.push(
-          new Paragraph({ text: "Texto extraído do PDF:", style: "Metadata", keepNext: true }),
-          ...makeParagraphs(pdf.text)
+          new Paragraph({ text: `Texto extraído do ${label}:`, style: "Metadata", keepNext: true }),
+          ...makeParagraphs(attachment.text)
         );
       } else {
         paragraphs.push(
           new Paragraph({
-            text: "[PDF pendente de revisão]",
+            text: `[${label} pendente de revisão]`,
             style: "Metadata",
           })
         );
@@ -169,13 +174,13 @@ export async function generateReport(): Promise<void> {
         pending.push(
           [
             `Registro: ${recordId}`,
-            `Anexo: ${String(pdfIndex + 1).padStart(2, "0")}`,
+            `Anexo: ${String(attachmentIndex + 1).padStart(2, "0")}`,
             `Assunto: ${email.subject}`,
             `Remetente: ${email.from}`,
             `ID Gmail: ${email.id}`,
-            `Arquivo: ${pdf.filename}`,
-            `Status: ${pdf.status}`,
-            `Erro: ${pdf.error ?? "Sem texto extraível"}`,
+            `Arquivo: ${attachment.filename}`,
+            `Status: ${attachment.status}`,
+            `Erro: ${attachment.error ?? "Sem texto extraível"}`,
           ].join("\n")
         );
       }
@@ -317,7 +322,7 @@ export async function generateReport(): Promise<void> {
     pendingPath,
     pending.length
       ? pending.join("\n\n----------------\n\n")
-      : "Nenhuma pendência de PDF encontrada.",
+      : "Nenhuma pendência de anexo encontrada.",
     "utf8"
   );
 
@@ -325,5 +330,5 @@ export async function generateReport(): Promise<void> {
   console.log("DOCX:", reportPath);
   console.log("Pendências:", pendingPath);
   console.log("Total de mensagens:", emails.length);
-  console.log("PDFs pendentes:", pending.length);
+  console.log("Anexos pendentes:", pending.length);
 }

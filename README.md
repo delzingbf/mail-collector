@@ -1,6 +1,6 @@
 # Mail Collector
 
-Programa local que lê os e-mails da caixa de entrada do Gmail, extrai o corpo das mensagens e o texto de anexos PDF e gera um relatório Word (`.docx`). A autorização do Gmail é somente de leitura: o programa não envia, apaga nem marca mensagens como lidas.
+Programa local que lê os e-mails da caixa de entrada do Gmail, extrai o corpo das mensagens e o texto de anexos PDF e Word (`.docx`) e gera um relatório Word (`.docx`). A autorização do Gmail é somente de leitura: o programa não envia, apaga nem marca mensagens como lidas.
 
 ## Plataformas
 
@@ -110,20 +110,20 @@ Referências: [público e usuários de teste](https://support.google.com/cloud/a
 2. No primeiro uso, o terminal exibirá um endereço de autorização Google. Copie e abra esse endereço no navegador **do mesmo computador**, mantendo a janela do programa aberta.
 3. Escolha a conta correta e autorize a leitura dos e-mails. Em um projeto de teste, a conta precisa estar na lista de usuários de teste. Só prossiga em uma eventual tela de aplicativo não verificado se reconhecer o projeto configurado por você ou pelo responsável.
 4. O navegador retornará para `http://127.0.0.1:3000/oauth2callback`. Aguarde a confirmação e a conclusão da sincronização no terminal.
-5. Confira os totais de mensagens salvas, já armazenadas, PDFs pendentes e falhas.
+5. Confira os totais de mensagens salvas, já armazenadas, anexos pendentes e falhas.
 
 O token fica em `tokens/gmail.json`; nos próximos usos, normalmente não é preciso repetir o login. A porta local **3000** precisa estar livre. Não é necessário configurar redirecionamento de porta no roteador.
 
 A sincronização usa o filtro `in:inbox`: lê a caixa de entrada, inclusive categorias que estejam nela. Mensagens arquivadas fora da caixa de entrada não são incluídas. A busca é paginada e pode demorar em caixas grandes.
 
-Os registros são gravados em `data/emails/`, um JSON por ID Gmail. Registros já salvos são ignorados nas próximas sincronizações. Para mudar de conta, guarde uma cópia e separe tanto `tokens/` quanto `data/` antes de autorizar a nova conta, evitando misturar mensagens no relatório.
+Os registros são gravados em `data/emails/`, um JSON por ID Gmail. Registros completos no novo formato são ignorados nas próximas sincronizações (veja a atualização para Word ao final). Para mudar de conta, guarde uma cópia e separe tanto `tokens/` quanto `data/` antes de autorizar a nova conta, evitando misturar mensagens no relatório.
 
 ## 4. Gerar e abrir o relatório
 
 1. Depois da sincronização, execute **`gerar_relatorio.bat`**.
 2. Execute **`abrir_relatorio.bat`** para abrir a pasta `reports` no Explorador de Arquivos.
 3. Abra o DOCX mais recente no Word ou aplicativo compatível.
-4. Confira também `pendencias-*.txt`, que lista anexos PDF que precisam de revisão.
+4. Confira também `pendencias-*.txt`, que lista anexos PDF ou Word que precisam de revisão.
 
 | Atalho | O que faz |
 | --- | --- |
@@ -173,7 +173,7 @@ npm.cmd test
 npm.cmd run build
 ```
 
-Os testes não acessam o Gmail nem usam credenciais reais. Cobrem extração de e-mail, leitura de um PDF real com camada de texto e geração de DOCX/TXT em pasta temporária com espaços e acentos. No Windows, executam também os atalhos de instalação, sincronização e geração com um npm simulado para conferir comandos, diretório de trabalho, códigos de saída e mensagens de erro. A abertura da pasta tem teste de falha; a abertura visual no Explorador precisa de conferência manual.
+Os testes não acessam o Gmail nem usam credenciais reais. Cobrem extração de e-mail, PDF real, Word com parágrafos e tabelas, anexos por MIME/extensão, falhas, migração de registros e geração de DOCX/TXT em pasta temporária com espaços e acentos. No Windows, executam também os atalhos de instalação, sincronização e geração com um npm simulado para conferir comandos, diretório de trabalho, códigos de saída e mensagens de erro. A abertura da pasta tem teste de falha; a abertura visual no Explorador precisa de conferência manual.
 
 Os testes dos `.bat` usam `cmd.exe`, incluindo caminhos com espaços, acentos, `&`, parênteses e `!`. Fora do Windows, esses 11 cenários são marcados como ignorados, não como aprovados. Para automação, a variável `MAIL_COLLECTOR_NO_PAUSE=1` desativa a pausa dos atalhos.
 
@@ -209,3 +209,13 @@ npm.cmd start
 ```
 
 `npm start` executa a sincronização compilada em `dist/`; rode `npm run build` após mudanças no código para não usar uma versão antiga. Os atalhos de uso executam diretamente os arquivos de `src/` via `tsx`.
+
+## Leitura de anexos Word (.docx)
+
+Anexos `.docx` são identificados pelo nome (inclusive `.DOCX`) ou pelo tipo MIME do Word. O texto de parágrafos e tabelas é extraído via Mammoth e aparece no relatório em uma seção de anexo, com o nome do arquivo, separado do corpo do e-mail. Não há OCR de imagens, nem reprodução da formatação original. O formato antigo `.doc` não é suportado.
+
+Depois de atualizar os arquivos, execute `instalar.bat` (ou `npm ci`) para instalar a nova dependência. Execute `sincronizar_emails.bat` e depois `gerar_relatorio.bat`. Preserve `credentials.json`, `tokens/` e `data/`.
+
+Na primeira sincronização desta versão, os registros antigos que ainda estejam na caixa de entrada são relidos automaticamente para buscar anexos Word antes ignorados. O JSON é substituído pelo mesmo ID, sem duplicação. Registros antigos fora da caixa de entrada permanecem disponíveis para o relatório, mas seus anexos Word não são recuperados automaticamente. Anexos com falha ou sem texto ficam no TXT de pendências e são tentados novamente na próxima sincronização. Registros completos passam a ser ignorados nas próximas execuções.
+
+Os novos JSONs usam `attachments`, com tipo (`pdf` ou `docx`), nome, texto, status e erro quando houver. O relatório continua aceitando os JSONs antigos com `pdfs`, mesmo sem nova sincronização.

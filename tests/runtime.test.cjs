@@ -43,6 +43,16 @@ test('generates DOCX and pending list in an isolated folder with spaces and acce
     pdfs: [{ filename: 'capítulo.pdf', text: 'Conteúdo do capítulo.', status: 'success' }],
     processedAt: '2026-11-10T12:00:00Z',
   }));
+  await fs.writeFile(path.join(dir, 'data', 'emails', 'mixed.json'), JSON.stringify({
+    id: 'mixed', from: 'Outro autor', subject: 'Word e PDF',
+    date: '2026-11-11T12:00:00Z', text: 'Corpo separado.',
+    attachments: [
+      { type: 'docx', filename: 'capítulo.docx', text: 'Texto exclusivo do Word.', status: 'success' },
+      { type: 'pdf', filename: 'novo.pdf', text: 'Texto exclusivo do PDF.', status: 'success' },
+      { type: 'docx', filename: 'vazio.docx', text: '', status: 'empty' },
+      { type: 'docx', filename: 'ruim.docx', text: '', status: 'error', error: 'Arquivo inválido' },
+    ], processedAt: '2026-11-11T12:00:00Z',
+  }));
   const result = spawnSync(process.execPath, [
     '--import', pathToFileURL(require.resolve('tsx')).href, path.resolve(__dirname, '../src/report-cli.ts'),
   ], { cwd: dir, encoding: 'utf8', timeout: 30000 });
@@ -56,5 +66,13 @@ test('generates DOCX and pending list in an isolated folder with spaces and acce
   const data = await fs.readFile(path.join(dir, 'reports', docx));
   assert.equal(data.subarray(0, 2).toString(), 'PK');
   assert.ok(data.length > 1000);
-  assert.equal(await fs.readFile(path.join(dir, 'reports', pending), 'utf8'), 'Nenhuma pendência de PDF encontrada.');
+  const reportText = (await require('mammoth').extractRawText({ buffer: data })).value;
+  for (const text of ['Conteúdo do capítulo.', 'Texto exclusivo do Word.', 'Texto exclusivo do PDF.', 'Word (.docx) pendente de revisão']) {
+    assert.ok(reportText.includes(text), text);
+  }
+  assert.equal(reportText.split('Texto exclusivo do Word.').length - 1, 1);
+  const issues = await fs.readFile(path.join(dir, 'reports', pending), 'utf8');
+  assert.match(issues, /vazio.docx/);
+  assert.match(issues, /ruim.docx/);
+  assert.match(issues, /Arquivo inválido/);
 });
